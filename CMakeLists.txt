@@ -1,15 +1,14 @@
 #
-# Copyright (c) 2014-2019 CNRS
+# Copyright (c) 2014-2020 CNRS
 # Copyright (c) 2018-2020 INRIA
 #
 
-CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.1)
 
 SET(PROJECT_NAME eigenpy)
 SET(PROJECT_DESCRIPTION "Bindings between Numpy and Eigen using Boost.Python")
 SET(PROJECT_URL "http://github.com/stack-of-tasks/eigenpy")
 SET(PROJECT_USE_CMAKE_EXPORT TRUE)
-SET(PROJECT_USE_KEYWORD_LINK_LIBRARIES TRUE)
 SET(PROJECT_CUSTOM_HEADER_EXTENSION "hpp")
 
 # Check if the submodule cmake have been initialized
@@ -35,16 +34,9 @@ STRING(REPLACE "-pedantic" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
 # If needed, fix CMake policy for APPLE systems
 APPLY_DEFAULT_APPLE_CONFIGURATION()
 
-IF(WIN32)
-  SET(LINK copy_if_different)
-ELSE(WIN32)
-  SET(LINK create_symlink)
-ENDIF(WIN32)
-
 # ----------------------------------------------------
 # --- OPTIONS  ---------------------------------------
 # ----------------------------------------------------
-OPTION(INSTALL_DOCUMENTATION "Generate and install the documentation" FALSE)
 OPTION(SUFFIX_SO_VERSION "Suffix library name with its version" OFF)
 
 IF(DEFINED BUILD_UNIT_TESTS)
@@ -54,19 +46,35 @@ IF(DEFINED BUILD_UNIT_TESTS)
   SET(BUILD_TESTING ${BUILD_UNIT_TESTS})
 ENDIF(DEFINED BUILD_UNIT_TESTS)
 
-FINDPYTHON()
-FIND_NUMPY()
-
 IF(WIN32)
   LINK_DIRECTORIES(${PYTHON_LIBRARY_DIRS})
 ENDIF(WIN32)
 
+SET(PYWRAP "${PROJECT_NAME}_pywrap")
+
 # ----------------------------------------------------
 # --- DEPENDENCIES -----------------------------------
 # ----------------------------------------------------
-ADD_PROJECT_DEPENDENCY(Eigen3 REQUIRED PKG_CONFIG_REQUIRES "eigen3 >= 3.0.5")
+ADD_PROJECT_DEPENDENCY(Eigen3 REQUIRED)
 
-SEARCH_FOR_BOOST_PYTHON()
+IF(BUILD_PYTHON_INTERFACE)
+  FINDPYTHON()
+  FIND_NUMPY()
+  SEARCH_FOR_BOOST_PYTHON(REQUIRED)
+ENDIF(BUILD_PYTHON_INTERFACE)
+
+# ----------------------------------------------------
+# --- INTERFACE --------------------------------------
+# ----------------------------------------------------
+ADD_LIBRARY(${PROJECT_NAME} INTERFACE)
+TARGET_INCLUDE_DIRECTORIES(${PROJECT_NAME}
+  SYSTEM INTERFACE
+  ${Boost_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIR}
+  INTERFACE
+  $<INSTALL_INTERFACE:include>)
+
+INSTALL(TARGETS ${PROJECT_NAME} EXPORT ${TARGETS_EXPORT_NAME} DESTINATION lib)
 
 # ----------------------------------------------------
 # --- INCLUDE ----------------------------------------
@@ -143,7 +151,7 @@ SET(${PROJECT_NAME}_SOLVERS_SOURCES
 SET(${PROJECT_NAME}_DECOMPOSITIONS_SOURCES
   src/decompositions/decompositions.cpp
   )
-  
+
 SET(${PROJECT_NAME}_SOURCES
   ${${PROJECT_NAME}_SOLVERS_SOURCES}
   ${${PROJECT_NAME}_DECOMPOSITIONS_SOURCES}
@@ -166,52 +174,50 @@ SET(${PROJECT_NAME}_SOURCES
   src/version.cpp
 )
 
-ADD_LIBRARY(${PROJECT_NAME} SHARED ${${PROJECT_NAME}_SOURCES} ${${PROJECT_NAME}_HEADERS})
-TARGET_INCLUDE_DIRECTORIES(${PROJECT_NAME} 
-  SYSTEM PUBLIC 
-  ${Boost_INCLUDE_DIRS} 
-  ${EIGEN3_INCLUDE_DIR}
-  ${PYTHON_INCLUDE_DIRS} 
-  ${NUMPY_INCLUDE_DIRS}
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
-
-IF(SUFFIX_SO_VERSION)
-  SET_TARGET_PROPERTIES(${PROJECT_NAME} PROPERTIES SOVERSION ${PROJECT_VERSION})
-ENDIF(SUFFIX_SO_VERSION)
-
-IF(NOT WIN32)
-  TARGET_COMPILE_OPTIONS(${PROJECT_NAME} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:-bigobj> "-Wno-conversion")
-ELSE()
-  TARGET_COMPILE_OPTIONS(${PROJECT_NAME} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:-bigobj>)
-ENDIF()
-
-TARGET_LINK_BOOST_PYTHON(${PROJECT_NAME} PUBLIC)
-INSTALL(TARGETS ${PROJECT_NAME}
-  EXPORT ${TARGETS_EXPORT_NAME}
-  PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}
-  INCLUDES DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}
-  LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
-
 ADD_HEADER_GROUP(${PROJECT_NAME}_HEADERS)
 ADD_SOURCE_GROUP(${PROJECT_NAME}_SOURCES)
 
-# Install package for ROS
-install(FILES package.xml DESTINATION share/eigenpy)
+IF(BUILD_PYTHON_INTERFACE)
+  ADD_LIBRARY(${PY_PROJECT_NAME} SHARED ${${PROJECT_NAME}_SOURCES} ${${PROJECT_NAME}_HEADERS})
+  TARGET_LINK_LIBRARIES(${PY_PROJECT_NAME} PUBLIC ${PROJECT_NAME})
+  TARGET_INCLUDE_DIRECTORIES(${PY_PROJECT_NAME}
+    SYSTEM PUBLIC
+    ${PYTHON_INCLUDE_DIR}
+    ${NUMPY_INCLUDE_DIRS})
 
-# ----------------------------------------------------
-# --- PYTHON LIBRARY ---------------------------------
-# ----------------------------------------------------
-ADD_SUBDIRECTORY(python)
+  IF(SUFFIX_SO_VERSION)
+    SET_TARGET_PROPERTIES(${PY_PROJECT_NAME} PROPERTIES SOVERSION ${PROJECT_VERSION})
+  ENDIF(SUFFIX_SO_VERSION)
 
-# ----------------------------------------------------
-# --- UNIT TEST --------------------------------------
-# ----------------------------------------------------
-ADD_SUBDIRECTORY(unittest)
+  IF(NOT WIN32)
+    TARGET_COMPILE_OPTIONS(${PY_PROJECT_NAME} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:-bigobj> "-Wno-conversion")
+  ELSE()
+    TARGET_COMPILE_OPTIONS(${PY_PROJECT_NAME} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:-bigobj>)
+  ENDIF()
 
-PKG_CONFIG_APPEND_LIBS(${PROJECT_NAME})
-PKG_CONFIG_APPEND_CFLAGS("-I${PYTHON_INCLUDE_DIRS}")
-PKG_CONFIG_APPEND_CFLAGS("-I${NUMPY_INCLUDE_DIRS}")
-PKG_CONFIG_APPEND_BOOST_LIBS(${BOOST_COMPONENTS})
+  TARGET_LINK_BOOST_PYTHON(${PY_PROJECT_NAME} PRIVATE)
+  INSTALL(TARGETS ${PY_PROJECT_NAME}
+    EXPORT ${TARGETS_EXPORT_PY_NAME}
+    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}
+    INCLUDES DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
+
+  PROJECT_INSTALL_COMPONENT(${PY_PROJECT_NAME})
+
+  # ----------------------------------------------------
+  # --- PYTHON LIBRARY ---------------------------------
+  # ----------------------------------------------------
+  ADD_SUBDIRECTORY(python)
+
+  # ----------------------------------------------------
+  # --- UNIT TEST --------------------------------------
+  # ----------------------------------------------------
+  ADD_SUBDIRECTORY(unittest)
+ENDIF()
+
+IF(NOT INSTALL_PYTHON_INTERFACE_ONLY)
+  # Install package for ROS
+  install(FILES package.xml DESTINATION "share/${PROJECT_NAME}")
+ENDIF()
