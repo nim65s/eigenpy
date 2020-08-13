@@ -8,7 +8,7 @@ SET_TARGET_PROPERTIES(python PROPERTIES EXCLUDE_FROM_DEFAULT_BUILD True)
 
 ADD_LIBRARY(${PYWRAP} SHARED main.cpp)
 ADD_DEPENDENCIES(python ${PYWRAP})
-TARGET_LINK_LIBRARIES(${PYWRAP} PUBLIC ${PROJECT_NAME})
+TARGET_LINK_LIBRARIES(${PYWRAP} PUBLIC ${PY_PROJECT_NAME})
 # BOOST_PYTHON_MEMBER_FUNCTION_OVERLOADS spews conversion warnings from int to long unsigned int.
 # Unfortunately, using literals does not work in a macro. As such, this turns them off for the entire wrapper:
 IF(NOT WIN32)
