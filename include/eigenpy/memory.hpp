@@ -37,7 +37,7 @@ namespace boost { namespace python { namespace objects { \
         union \
         { \
           align_t align; \
-          char bytes[sizeof(Data) + 16]; \
+          char bytes[sizeof(Data) + boost::alignment_of<__VA_ARGS__>::value]; \
         } storage; \
       }; \
        \
@@ -89,7 +89,9 @@ namespace boost { namespace python { namespace objects { \
          \
         static inline value_holder<__VA_ARGS__>* construct(void* storage, PyObject* instance, reference_wrapper<__VA_ARGS__ const> x) \
         { \
-          void* aligned_storage = reinterpret_cast<void*>((reinterpret_cast<size_t>(storage) & ~(size_t(15))) + 16); \
+          void* aligned_storage = reinterpret_cast<void*>((reinterpret_cast<size_t>(storage) \
+                      & ~(size_t(boost::alignment_of<__VA_ARGS__>::value - 1))) \
+                      + boost::alignment_of<__VA_ARGS__>::value); \
           value_holder<__VA_ARGS__>* new_holder = new (aligned_storage) value_holder<__VA_ARGS__>(instance, x); \
           return new_holder; \
         } \
