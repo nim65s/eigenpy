@@ -96,6 +96,44 @@ namespace boost { namespace python { namespace objects { \
           return new_holder; \
         } \
       }; \
+       \
+      template <typename Arg> \
+      struct make_holder<1>::apply<value_holder<__VA_ARGS__>, boost::mpl::vector1<Arg> > { \
+        static void execute (PyObject *p, Arg a0) { \
+          typedef instance<value_holder<__VA_ARGS__>> instance_t; \
+          void* memory = value_holder<__VA_ARGS__>::allocate(p, offsetof(instance_t, storage), \
+                  sizeof(value_holder<__VA_ARGS__>) + boost::alignment_of<__VA_ARGS__>::value); \
+          try { \
+            void* aligned_storage = reinterpret_cast<void*>((reinterpret_cast<size_t>(memory) \
+                        & ~(size_t(boost::alignment_of<__VA_ARGS__>::value - 1))) \
+                        + boost::alignment_of<__VA_ARGS__>::value); \
+            (new (aligned_storage) value_holder<__VA_ARGS__>(p, a0))->install(p); \
+          } \
+          catch(...) { \
+            value_holder<__VA_ARGS__>::deallocate(p, memory); \
+            throw; \
+          } \
+        } \
+      }; \
+      \
+      template <typename Arg> \
+      struct make_holder<4>::apply<value_holder<__VA_ARGS__>, boost::mpl::vector4<Arg, Arg, Arg, Arg> > { \
+        static void execute (PyObject *p, Arg a0, Arg a1, Arg a2, Arg a3) { \
+          typedef instance<value_holder<__VA_ARGS__>> instance_t; \
+          void* memory = value_holder<__VA_ARGS__>::allocate(p, offsetof(instance_t, storage), \
+                  sizeof(value_holder<__VA_ARGS__>) + boost::alignment_of<__VA_ARGS__>::value); \
+          try { \
+            void* aligned_storage = reinterpret_cast<void*>((reinterpret_cast<size_t>(memory) \
+                        & ~(size_t(boost::alignment_of<__VA_ARGS__>::value - 1))) \
+                        + boost::alignment_of<__VA_ARGS__>::value); \
+            (new (aligned_storage) value_holder<__VA_ARGS__>(p, a0, a1, a2, a3))->install(p); \
+          } \
+          catch(...) { \
+            value_holder<__VA_ARGS__>::deallocate(p, memory); \
+            throw; \
+          } \
+        } \
+      }; \
     }}}
 
 #endif // __eigenpy_memory_hpp__
