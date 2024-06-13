@@ -10,12 +10,12 @@ jobs:
     container:
       image: archlinux/archlinux:base-devel
     steps:
-    - run: pacman -Syu --noconfirm boost cmake eigen git python-numpy python-scipy
+    - run: pacman -Syu --noconfirm boost cmake eigen git ninja python-numpy python-scipy
 
     - uses: actions/checkout@v4
       with:
         submodules: true
 
-    - run: cmake -B build -S . -DBUILD_PYTHON_INTERFACE=ON
+    - run: cmake -B build -S . -DCMAKE_GENERATOR=Ninja
     - run: cmake --build build
     - run: cmake --build build -t test
